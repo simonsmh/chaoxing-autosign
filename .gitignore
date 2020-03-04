@@ -5,3 +5,6 @@ data
 *.json
 !sample.json
 Pipfile*
+/build
+/dist
+main.spec

@@ -98,11 +98,7 @@ def load_json(filename="config.json"):
     return config
 
 
-def main():
-    if len(sys.argv) >= 2 and os.path.exists(sys.argv[1]):
-        configs = load_json(sys.argv[1])
-    else:
-        configs = load_json()
+def main(configs):
     loop = asyncio.new_event_loop()
     tasks = [
         sign_user(
@@ -115,7 +111,14 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) >= 2 and os.path.exists(sys.argv[1]):
+        configs = load_json(sys.argv[1])
+    else:
+        configs = [
+            {"SCHOOLID": 25417, "USERNAME": input("用户名: "), "PASSWORD": input("密码: "),}
+        ]
+    main(configs)
+    logger.info("下次执行在5分钟之后")
     schedule.every(5).minutes.do(main)
     while True:
         schedule.run_pending()
