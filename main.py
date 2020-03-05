@@ -54,7 +54,7 @@ async def sign_user(loop, username, password, schoolid):
         task_soup = BeautifulSoup(task_page.content, "lxml")
         task_list = [
             re.search(r"activeDetail\((\d+),", tasks.get("onclick")).group(1)
-            for tasks in task_soup.select("div#startList [onclick]")
+            for tasks in task_soup.select("div#startList [onclick$=',2,null)']")
         ]
         if task_list:
             logger.info(f"{name}: {course_name}: {task_list}")
