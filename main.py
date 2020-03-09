@@ -106,8 +106,12 @@ def main(configs):
         )
         for config in configs
     ]
-    loop.run_until_complete(asyncio.gather(*tasks, loop=loop))
-    loop.close()
+    try:
+        loop.run_until_complete(asyncio.gather(*tasks, loop=loop))
+    except:
+        pass
+    finally:
+        loop.close()
 
 
 if __name__ == "__main__":
@@ -115,7 +119,7 @@ if __name__ == "__main__":
         configs = load_json(sys.argv[1])
     else:
         configs = [
-            {"SCHOOLID": 25417, "USERNAME": input("用户名: "), "PASSWORD": input("密码: "),}
+                {"SCHOOLID": int(input("学校 fid: ") or 25417), "USERNAME": input("学号: "), "PASSWORD": input("密码: "),}
         ]
     main(configs)
     logger.info("下次执行在5分钟之后")
