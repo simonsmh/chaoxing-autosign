@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import sys
+import threading
 import time
 
 import requests
@@ -114,16 +115,25 @@ def main(configs):
         loop.close()
 
 
+def run_threaded(job_func, args):
+    job_thread = threading.Thread(target=job_func, args=[args])
+    job_thread.start()
+
+
 if __name__ == "__main__":
     if len(sys.argv) >= 2 and os.path.exists(sys.argv[1]):
         configs = load_json(sys.argv[1])
     else:
         configs = [
-                {"SCHOOLID": int(input("学校 fid: ") or 25417), "USERNAME": input("学号: "), "PASSWORD": input("密码: "),}
+            {
+                "SCHOOLID": int(input("学校 fid: ") or 25417),
+                "USERNAME": input("学号: "),
+                "PASSWORD": input("密码: "),
+            }
         ]
     main(configs)
     logger.info("下次执行在5分钟之后")
-    schedule.every(5).minutes.do(main)
+    schedule.every(5).minutes.do(run_threaded, main, configs)
     while True:
         schedule.run_pending()
         time.sleep(1)
