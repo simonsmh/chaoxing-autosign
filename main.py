@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 
-import requests
+import aiohttp
 import schedule
 from bs4 import BeautifulSoup
 
@@ -20,39 +20,29 @@ logger = logging.getLogger("Chaoxing Autosign")
 
 
 async def sign_user(loop, username, password, schoolid):
-    s = requests.Session()
-    s.headers.update(
-        {
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.87 Safari/537.36"
-        }
-    )
-
     async def sign_task(course_name, course_id, class_id):
         async def sign(task):
-            sign = await loop.run_in_executor(
-                None,
-                lambda x: s.get(
-                    x,
-                    params={
-                        "activeId": task,
-                        "courseId": course_id,
-                        "classId": class_id,
-                        "fid": schoolid,
-                    },
-                ),
+            async with s.get(
                 "https://mobilelearn.chaoxing.com/widget/sign/pcStuSignController/preSign",
-            )
-            sign_soup = BeautifulSoup(sign.content, "lxml")
+                params={
+                    "activeId": task,
+                    "courseId": course_id,
+                    "classId": class_id,
+                    "fid": schoolid,
+                },
+            ) as resp:
+                sign = await resp.text()
+            sign_soup = BeautifulSoup(sign, "lxml")
             result = sign_soup.select("span.greenColor")[0].text
             logger.info(f"{name}: {course_name}: {task} {result}")
             return result
 
-        task_page = await loop.run_in_executor(
-            None,
-            lambda x: s.get(x, params={"courseId": course_id, "jclassId": class_id}),
+        async with s.get(
             "https://mobilelearn.chaoxing.com/widget/pcpick/stu/index",
-        )
-        task_soup = BeautifulSoup(task_page.content, "lxml")
+            params={"courseId": course_id, "jclassId": class_id},
+        ) as resp:
+            task_page = await resp.text()
+        task_soup = BeautifulSoup(task_page, "lxml")
         task_list = [
             re.search(r"activeDetail\((\d+),", tasks.get("onclick")).group(1)
             for tasks in task_soup.select("div#startList [onclick$=',2,null)']")
@@ -65,22 +55,32 @@ async def sign_user(loop, username, password, schoolid):
             logger.info(f"{name}: {course_name}: 无签到任务")
         return
 
-    login = s.get(
-        "http://passport2.chaoxing.com/api/login",
-        params={"name": username, "pwd": password, "schoolid": schoolid},
-    )
-    name = login.json().get("uname")
-    logger.info(f"{name}: {login.json()}")
-    home = s.get("http://mooc1-2.chaoxing.com/visit/interaction")
-    home_soup = BeautifulSoup(home.content, "lxml")
-    course_id = [course.get("value") for course in home_soup.select("[name=courseId]")]
-    class_id = [course.get("value") for course in home_soup.select("[name=classId]")]
-    course_name = [course.a.text for course in home_soup.select("h3.clearfix")]
-    tasks = [
-        sign_task(course_name[i], course_id[i], class_id[i])
-        for i in range(len(course_id))
-    ]
-    await asyncio.gather(*tasks)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.87 Safari/537.36"
+    }
+    async with aiohttp.ClientSession(headers=headers) as s:
+        async with s.get(
+            "http://passport2.chaoxing.com/api/login",
+            params={"name": username, "pwd": password, "schoolid": schoolid},
+        ) as resp:
+            login = await resp.json(content_type=None)
+        name = login.get("uname")
+        logger.info(f"{name}: {login}")
+        async with s.get("http://mooc1-2.chaoxing.com/visit/interaction") as resp:
+            home = await resp.text()
+        home_soup = BeautifulSoup(home, "lxml")
+        course_id = [
+            course.get("value") for course in home_soup.select("[name=courseId]")
+        ]
+        class_id = [
+            course.get("value") for course in home_soup.select("[name=classId]")
+        ]
+        course_name = [course.a.text for course in home_soup.select("h3.clearfix")]
+        tasks = [
+            sign_task(course_name[i], course_id[i], class_id[i])
+            for i in range(len(course_id))
+        ]
+        await asyncio.gather(*tasks)
 
 
 def load_json(filename="config.json"):
