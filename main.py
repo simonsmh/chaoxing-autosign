@@ -4,11 +4,10 @@ import logging
 import os
 import re
 import sys
-import threading
-import time
+from datetime import datetime
 
 import aiohttp
-import schedule
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from bs4 import BeautifulSoup
 
 logging.basicConfig(
@@ -19,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger("Chaoxing Autosign")
 
 
-async def sign_user(loop, username, password, schoolid):
+async def sign_user(username, password, schoolid):
     async def sign_task(course_name, course_id, class_id):
         async def sign(task):
             async with s.get(
@@ -99,27 +98,6 @@ def load_json(filename="config.json"):
     return config
 
 
-def main(configs):
-    loop = asyncio.new_event_loop()
-    tasks = [
-        sign_user(
-            loop, config.get("USERNAME"), config.get("PASSWORD"), config.get("SCHOOLID")
-        )
-        for config in configs
-    ]
-    try:
-        loop.run_until_complete(asyncio.gather(*tasks, loop=loop))
-    except:
-        pass
-    finally:
-        loop.close()
-
-
-def run_threaded(job_func, args):
-    job_thread = threading.Thread(target=job_func, args=[args])
-    job_thread.start()
-
-
 if __name__ == "__main__":
     if len(sys.argv) >= 2 and os.path.exists(sys.argv[1]):
         configs = load_json(sys.argv[1])
@@ -131,9 +109,18 @@ if __name__ == "__main__":
                 "PASSWORD": input("密码: "),
             }
         ]
-    main(configs)
-    logger.info("下次执行在5分钟之后")
-    schedule.every(5).minutes.do(run_threaded, main, configs)
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+    scheduler = AsyncIOScheduler()
+    for config in configs:
+        scheduler.add_job(
+            sign_user,
+            "interval",
+            minutes=5,
+            next_run_time=datetime.now(),
+            args=[
+                config.get("USERNAME"),
+                config.get("PASSWORD"),
+                config.get("SCHOOLID"),
+            ],
+        )
+    scheduler.start()
+    asyncio.get_event_loop().run_forever()

@@ -1,4 +1,4 @@
 aiohttp[speedups]
+apscheduler
 bs4
 lxml
-schedule
